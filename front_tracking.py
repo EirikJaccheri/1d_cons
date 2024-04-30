@@ -159,6 +159,17 @@ def front_tracking(x0: np.array, u0: np.array, uint: np.array, fint: np.array):
     return ulist, xlist, slist, tlist
 
 
+def Lax_Friedrichs(u, x, dt, T, N_cell, f):
+    dx = (x[-1] - x[0]) / N_cell
+    for i in range(int(T / dt)):
+        u[1:-1] = (u[:-2] + u[2:]) / 2 - dt / \
+            (2*dx) * (f(u[2:]) - f(u[:-2]))
+        # boundary condition
+        u[0] = u[1]
+        u[-1] = u[-2]
+    return u
+
+
 def plot_fronts(ulist, xlist, slist, tlist):
     N = 100
     for i in range(len(tlist)):
@@ -172,7 +183,7 @@ def plot_fronts(ulist, xlist, slist, tlist):
     plt.show()
 
 
-def plot_velocity_profiles(ulist, xlist, slist, tlist, t):
+def plot_velocity_profiles(ulist, xlist, slist, tlist, t, x_arr=None, u_arr=None):
     N = 100
     dx = 10
     print("tlist", tlist)
@@ -192,8 +203,13 @@ def plot_velocity_profiles(ulist, xlist, slist, tlist, t):
             x = np.linspace(xt[-1], xt[-1] + dx, N)
             plt.plot(x, ulist[i][-1]*np.ones_like(x))
             plt.plot()
-            plt.show()
             break
+
+    if x_arr is not None and u_arr is not None:
+        plt.plot(x_arr, u_arr, label="Lax-Friedrichs")
+
+    plt.legend()
+    plt.show()
 
 
 if __name__ == "__main__":
@@ -206,18 +222,25 @@ if __name__ == "__main__":
     Uint = np.array([-2, -1, 0, 1, 2, 3, 4, 5])
     def F(u): return 1/2*u**2
     Fint = F(Uint)
+    T = 0.5
     ULIST, XLIST, SLIST, TLIST = front_tracking(X0, U0, Uint, Fint)
-    plot_fronts(ULIST, XLIST, SLIST, TLIST)
-    plot_velocity_profiles(ULIST, XLIST, SLIST, TLIST, 2)
+    # plot_fronts(ULIST, XLIST, SLIST, TLIST)
 
-    X0 = np.array([0])
-    U0 = np.array([1, 0])
-    Uint = np.linspace(-1, 1, 100)
-    def F(u): return 1/2*u**2
-    Fint = F(Uint)
-    ULIST, XLIST, SLIST, TLIST = front_tracking(X0, U0, Uint, Fint)
-    print("ULIST", ULIST)
-    print("XLIST", XLIST)
-    print("SLIST", SLIST)
-    plot_fronts(ULIST, XLIST, SLIST, TLIST)
-    plot_velocity_profiles(ULIST, XLIST, SLIST, TLIST, 2)
+    # Lax-Friedrichs
+    N_CELL = 1000
+    DX_EDGE = 10
+    X_LF = np.linspace(X0[0]-DX_EDGE, X0[-1]+DX_EDGE, N_CELL)
+    U_LF = np.ones_like(X_LF)*U0[0]
+    for i in range(len(X_LF)):
+        for j in range(len(X0)-1):
+            if X0[j] < X_LF[i] < X0[j+1]:
+                print("j", j, ": ", X0[j], "<", X_LF[i], "<", X0[j+1])
+                U_LF[i] = U0[j+1]
+                break
+            if X_LF[i] > X0[-1]:
+                U_LF[i] = U0[-1]
+
+    DT = 0.001
+    U_SOL_LF = Lax_Friedrichs(U_LF, X_LF, DT, T, N_CELL, F)
+    plot_velocity_profiles(ULIST, XLIST, SLIST, TLIST,
+                           T, x_arr=X_LF, u_arr=U_SOL_LF)
