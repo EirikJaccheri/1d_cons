@@ -85,6 +85,8 @@ def get_roe_avg(Q1, Q2):
     alpha3 = (delta[1] + (c - u) * delta[0] - c * alpha2) / (2 * c)
     alpha1 = delta[0] - alpha2 - alpha3
     alpha = np.array([alpha1, alpha2, alpha3])
+    # TODO sjekk disse koefisientene numerisk
+    # (løse matriseproblem delta = Q2 - Q1 = R alpha)
 
     # create matrix of eigenvectors
     # dette er en kopi Leveque s301
@@ -93,6 +95,9 @@ def get_roe_avg(Q1, Q2):
         [u-c, u, u+c],
         [h-u*c, 0.5*u**2, h+u*c]]
     )
+
+    # alternativ metode som ser ut til å gi samme svar
+    # alpha_test = np.linalg.inv(R) @ delta
 
     # create vector of eigenvalues
     lam = np.array([u-c, u, u+c])
@@ -115,6 +120,7 @@ def euler_1d_roe(N_cell, Q0, L, T):
     7. Matematika eller Maple
     8. For å bruke thermopack må h byttes ut med e eller s
     9. Løse matriseproblem for å få egenevektor basis numerisk
+        - har testet og gir samme svar som analytisk løsning
     10. start 14.8 og sjekke at jeg får det samme når jeg legger inn ideel gas
         - Enklest med disse variablene: rho, u, e
         - E = rho (e + 1/2 u^2)
@@ -153,6 +159,7 @@ def euler_1d_roe(N_cell, Q0, L, T):
             print("NAN")
             exit()
         else:
+            # TODO sjekk fortegn!!!! ustabilitet gikk bort men fortsatt feil svar
             Q = Q - dt / dx * (AmDQ2 + ApDQ1)
             print(Q)
 
@@ -192,7 +199,7 @@ if __name__ == "__main__":
     Q0 = np.array([rho0, rho0*u0, e0])
     L = 1
     T = 0.25
-    # Q = euler_1d_lf(N_cell, Q0, L, T)
+    Qlf = euler_1d_lf(N_cell, Q0, L, T)
     Qroe = euler_1d_roe(N_cell, Q0, L, T)
     # plot
     x = np.linspace(0, L, len(p0))
@@ -200,6 +207,7 @@ if __name__ == "__main__":
     fig, ax = plt.subplots()
     ax.plot(x, Q0[0, :], label="initial")
     ax.plot(x, Qroe[0, :], label="roe solver")
+    ax.plot(x, Qlf[0, :], label="lax-friedrichs")
     ax.set_xlabel("x")
     ax.set_ylabel("rho")
     ax.legend()
@@ -208,6 +216,7 @@ if __name__ == "__main__":
     fig, ax = plt.subplots()
     ax.plot(x, Q0[1, :] / Q0[0, :], label="initial")
     ax.plot(x, Qroe[1, :] / Qroe[0, :], label="roe solver")
+    ax.plot(x, Qlf[1, :] / Qlf[0, :], label="lax-friedrichs")
     ax.set_xlabel("x")
     ax.set_ylabel("u")
     ax.legend()
@@ -216,6 +225,7 @@ if __name__ == "__main__":
     fig, ax = plt.subplots()
     ax.plot(x, Q0[2, :], label="initial")
     ax.plot(x, Qroe[2, :], label="roe solver")
+    ax.plot(x, Qlf[2, :], label="lax-friedrichs")
     ax.set_xlabel("x [m]")
     ax.set_ylabel("e [J]")
     ax.legend()
