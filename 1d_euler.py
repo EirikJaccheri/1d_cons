@@ -103,6 +103,22 @@ def get_roe_avg(Q1, Q2):
 def euler_1d_roe(N_cell, Q0, L, T):
     """
     Solve 1d euler with Roe method for polytropic gas
+
+    TODO:
+    1. Plott trykk, temperatur, hastighet, tetthet
+    2. Gå fra initsialverdier til
+    3. Bare konstante verdier og se at ingen ting endrer seg
+    3.5 Bare konstant trykk 
+    4. Hvorfor kommer det masse bakover?
+    5. Regn ut roe average for eulerlikningene selv
+    6. Teste A(Qi - Qi-1) = f(Qi) - f(Qi-1)
+    7. Matematika eller Maple
+    8. For å bruke thermopack må h byttes ut med e eller s
+    9. Løse matriseproblem for å få egenevektor basis numerisk
+    10. start 14.8 og sjekke at jeg får det samme når jeg legger inn ideel gas
+        - Enklest med disse variablene: rho, u, e
+        - E = rho (e + 1/2 u^2)
+        - evt bytte etterpå
     """
     Q = copy.deepcopy(Q0)
     dx = L / N_cell
@@ -116,7 +132,7 @@ def euler_1d_roe(N_cell, Q0, L, T):
         print("*******************************'")
         p = (gamma - 1) * Q[0, 1:-1] * Q[2, 1:-1]
         c = max(np.sqrt((gamma - 1) * (Q[2, 1:-1] + p / Q[0, 1:-1])))
-        dt = min(0.9 * dx / (c + max(abs(Q[1, 1:-1]))), T-t)
+        dt = min(0.1 * dx / (c + max(abs(Q[1, 1:-1]))), T-t)
 
         for i in range(1, N_cell-1):
             # get roe average
