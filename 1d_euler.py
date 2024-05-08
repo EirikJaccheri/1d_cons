@@ -165,12 +165,12 @@ def euler_1d_roe(N_cell, Q0, L, T):
                 print("RH condition: ", "A delta - (f(Q[:,i]) - f(Q[:,i-1]))", A @
                       delta - (f(Q[:, i]) - f(Q[:, i-1])), "for cell ", i)
 
-            lam1m = 0.5 * (lam1 - np.abs(lam1))
-            lam2p = 0.5 * (lam2 + np.abs(lam2))
+            lam1p = 0.5 * (lam1 + np.abs(lam1))
+            lam2m = 0.5 * (lam2 - np.abs(lam2))
 
             # calculate A^{\mp} Delta Q_{i \pm 1/2}
-            ApDQ1[:, i] = R2 @ np.diag(lam2p) @ alpha2
-            AmDQ2[:, i] = R1 @ np.diag(lam1m) @ alpha1
+            ApDQ1[:, i] = R1 @ np.diag(lam1p) @ alpha1
+            AmDQ2[:, i] = R2 @ np.diag(lam2m) @ alpha2
         # print("c1", c1_list)
         # print("c2", c2_list)
         # print("np.sqrt((gamma - 1) * (Q[2, 1:-1] + p / Q[0, 1:-1]))",
@@ -182,7 +182,7 @@ def euler_1d_roe(N_cell, Q0, L, T):
             return Q
         else:
             # TODO sjekk fortegn!!!! ustabilitet gikk bort men fortsatt feil svar
-            Q = Q + dt / dx * (AmDQ2 + ApDQ1)
+            Q = Q - dt / dx * (AmDQ2 + ApDQ1)
 
         # boundary condition
         Q[:, 0] = Q[:, 1]
