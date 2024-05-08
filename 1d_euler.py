@@ -7,18 +7,31 @@ R = 8.314
 c_v = 0.718e3  # J/kgK
 
 
+def get_conservative(rho, u, p):
+    E = p / (gamma - 1) + 0.5 * rho * u**2
+    return np.array([rho, rho*u, E])
+
+
+def get_primitive(Q):
+    rho = Q[0]
+    u = Q[1] / Q[0]
+    E = Q[2]
+    p = (gamma - 1) * (E - 0.5 * rho * u**2)
+    return rho, u, p
+
+
 def f(Q):
     """
     Compute flux
     """
     rho = Q[0]
     rhou = Q[1]
-    e = Q[2]
-    p = (gamma - 1) * rho * e
+    E = Q[2]
+    p = (gamma - 1) * (E - 0.5 * rhou**2 / rho)
 
     f0 = rhou
     f1 = rhou**2/rho + p
-    f2 = (e + p) * rhou/rho
+    f2 = (E + p) * rhou/rho
     return np.array([f0, f1, f2])
 
 
@@ -38,8 +51,11 @@ def euler_1d_lf(N_cell, Q0, L, T):
     t = 0
     while t < T:
         # time step
-        p = (gamma - 1) * Q[0, 1:-1] * Q[2, 1:-1]
-        c = max(np.sqrt((gamma - 1) * (Q[2, 1:-1] + p / Q[0, 1:-1])))
+        rho = Q[0, 1:-1]
+        rhou = Q[1, 1:-1]
+        E = Q[2, 1:-1]
+        p = (gamma - 1) * (E - 0.5 * rhou**2 / rho)
+        c = max(np.sqrt(gamma * p / rho))
         dt = min(0.9 * dx / (c + max(abs(Q[1, 1:-1]))), T-t)
 
         Q[:, 1:-1] = (Q[:, :-2] + Q[:, 2:]) / 2 - dt / \
@@ -56,53 +72,40 @@ def get_roe_avg(Q1, Q2):
     """
     Roe average of left statte Q1 and right state Q2
     """
-    # unpack values
     # left state
-    rho1 = Q1[0]
-    rhou1 = Q1[1]
-    u1 = rhou1 / rho1
+    rho1, u1, p1 = get_primitive(Q1)
+    E1 = p1 / (gamma - 1) + 0.5 * rho1 * u1**2
 
-    e1 = Q1[2]
-    p1 = (gamma - 1) * rho1 * e1
     # right state
-    rho2 = Q2[0]
-    rhou2 = Q2[1]
-    u2 = rhou2 / rho2
-    e2 = Q2[2]
-    p2 = (gamma - 1) * rho2 * e2
+    rho2, u2, p2 = get_primitive(Q2)
+    E2 = p2 / (gamma - 1) + 0.5 * rho2 * u2**2
 
-    # Get Roe averaged quatities TODO gjør utregningene selv
+    # Get Roe averaged quatities
     u = (np.sqrt(rho1) * u1 + np.sqrt(rho2) * u2) / \
         (np.sqrt(rho1) + np.sqrt(rho2))
-    h = ((e1 + p1) / np.sqrt(rho1) + (e2 + p2) /
+
+    # TODO check this!
+    H1 = (E1 + p1) / rho1
+    H2 = (E2 + p2) / rho2
+    H = (H1 * np.sqrt(rho1) + H2 *
          np.sqrt(rho2)) / (np.sqrt(rho1) + np.sqrt(rho2))
-    c = np.sqrt((gamma - 1) * (h - 0.5 * u**2))
+    c = np.sqrt((gamma - 1) * (H - 0.5 * u**2))
 
-    # Find wave speeds ??? TODO regne over dette (foreløpig bare kopi av )
-    delta = Q2 - Q1
-    alpha2 = (gamma - 1) * ((h - u**2) *
-                            delta[0] + u * delta[1] - delta[2]) / c**2
-    alpha3 = (delta[1] + (c - u) * delta[0] - c * alpha2) / (2 * c)
-    alpha1 = delta[0] - alpha2 - alpha3
-    alpha = np.array([alpha1, alpha2, alpha3])
-    # TODO sjekk disse koefisientene numerisk
-    # (løse matriseproblem delta = Q2 - Q1 = R alpha)
-
-    # create matrix of eigenvectors
-    # dette er en kopi Leveque s301
+    # create matrix of eigenvector Leveque s301
     R = np.array([
         [1, 1, 1],
         [u-c, u, u+c],
-        [h-u*c, 0.5*u**2, h+u*c]]
+        [H-u*c, 0.5*u**2, H+u*c]]
     )
 
-    # alternativ metode som ser ut til å gi samme svar
-    # alpha_test = np.linalg.inv(R) @ delta
+    # Find wave speeds
+    delta = Q2 - Q1
+    alpha = np.linalg.inv(R) @ delta
 
     # create vector of eigenvalues
     lam = np.array([u-c, u, u+c])
 
-    return u, h, c, alpha, R, lam
+    return u, H, c, alpha, R, lam
 
 
 def euler_1d_roe(N_cell, Q0, L, T):
@@ -110,21 +113,28 @@ def euler_1d_roe(N_cell, Q0, L, T):
     Solve 1d euler with Roe method for polytropic gas
 
     TODO:
-    1. Plott trykk, temperatur, hastighet, tetthet
-    2. Gå fra initsialverdier til
-    3. Bare konstante verdier og se at ingen ting endrer seg
-    3.5 Bare konstant trykk 
+    1. Plott trykk, temperatur (er vel ikke noe temperatur?), hastighet, tetthet X
+    2. Gå fra primitive til konserverte variabler og tilbake X
+    3. Bare konstante verdier og se at ingen ting endrer seg X
+    3.5 Bare konstant trykk (må vel også ha konstant tetthet?) X
     4. Hvorfor kommer det masse bakover?
-    5. Regn ut roe average for eulerlikningene selv
-    6. Teste A(Qi - Qi-1) = f(Qi) - f(Qi-1)
+        - dette ser ut til å fikse seg når man bytter fortegn på fluxen
+    5. Regn ut roe average for eulerlikningene selv X
+    6. Teste A(Qi - Qi-1) = f(Qi) - f(Qi-1) X
     7. Matematika eller Maple
     8. For å bruke thermopack må h byttes ut med e eller s
-    9. Løse matriseproblem for å få egenevektor basis numerisk
+    9. Løse matriseproblem for å få egenevektor basis numerisk X
         - har testet og gir samme svar som analytisk løsning
     10. start 14.8 og sjekke at jeg får det samme når jeg legger inn ideel gas
         - Enklest med disse variablene: rho, u, e
         - E = rho (e + 1/2 u^2)
         - evt bytte etterpå
+    11. Sjekke hvorfor alpha_test2 = Lam R^-1 delta f gir rett svar, mens 1 og 3 blir feil X
+        - 2 inneholder bare u X
+        -funker nå
+    12. Hva er sammenhengen mellom celleverdien av c og c1 og c2?
+    13. Er coordinatene i f egt (rho, rhou, H) ??? X
+            - nå tror jeg at det er riktig med (rho, rho u, E)
     """
     Q = copy.deepcopy(Q0)
     dx = L / N_cell
@@ -132,18 +142,28 @@ def euler_1d_roe(N_cell, Q0, L, T):
     t = 0
     ApDQ1 = np.zeros_like(Q)
     AmDQ2 = np.zeros_like(Q)
-    print(Q)
     while t < T:
         # time step
-        print("*******************************'")
-        p = (gamma - 1) * Q[0, 1:-1] * Q[2, 1:-1]
-        c = max(np.sqrt((gamma - 1) * (Q[2, 1:-1] + p / Q[0, 1:-1])))
-        dt = min(0.1 * dx / (c + max(abs(Q[1, 1:-1]))), T-t)
+        rho, u, p = get_primitive(Q)
+        c = max(np.sqrt(gamma * p / rho))
+        dt = min(0.4 * dx / (c + max(abs(Q[1, 1:-1]))), T-t)
 
+        # TEST
+        c1_list = np.zeros(N_cell-2)
+        c2_list = np.zeros(N_cell-2)
         for i in range(1, N_cell-1):
             # get roe average
             u1, h1, c1, alpha1, R1, lam1 = get_roe_avg(Q[:, i-1], Q[:, i])
             u2, h2, c2, alpha2, R2, lam2 = get_roe_avg(Q[:, i], Q[:, i+1])
+            c1_list[i-1] = c1
+            c2_list[i-1] = c2
+
+            # TEST RH condition TODO har vi samme kordinater på f og A?
+            A = R1 @ np.diag(lam1) @ np.linalg.inv(R1)
+            delta = Q[:, i] - Q[:, i-1]
+            if not np.allclose(A @ delta - (f(Q[:, i]) - f(Q[:, i-1])), 0):
+                print("RH condition: ", "A delta - (f(Q[:,i]) - f(Q[:,i-1]))", A @
+                      delta - (f(Q[:, i]) - f(Q[:, i-1])), "for cell ", i)
 
             lam1m = 0.5 * (lam1 - np.abs(lam1))
             lam2p = 0.5 * (lam2 + np.abs(lam2))
@@ -151,40 +171,32 @@ def euler_1d_roe(N_cell, Q0, L, T):
             # calculate A^{\mp} Delta Q_{i \pm 1/2}
             ApDQ1[:, i] = R2 @ np.diag(lam2p) @ alpha2
             AmDQ2[:, i] = R1 @ np.diag(lam1m) @ alpha1
-
+        # print("c1", c1_list)
+        # print("c2", c2_list)
+        # print("np.sqrt((gamma - 1) * (Q[2, 1:-1] + p / Q[0, 1:-1]))",
+        #       np.sqrt((gamma - 1) * (Q[2, 1:-1] + p[1:-1] / Q[0, 1:-1])))
+        # exit()
         # update Q
-
         if np.any(np.isnan(- dt / dx * (AmDQ2 + ApDQ1))):
-            return Q
             print("NAN")
-            exit()
+            return Q
         else:
             # TODO sjekk fortegn!!!! ustabilitet gikk bort men fortsatt feil svar
-            Q = Q - dt / dx * (AmDQ2 + ApDQ1)
-            print(Q)
+            Q = Q + dt / dx * (AmDQ2 + ApDQ1)
 
         # boundary condition
         Q[:, 0] = Q[:, 1]
         Q[:, -1] = Q[:, -2]
 
         t += dt
+        print(t)
 
     return Q
 
 
 if __name__ == "__main__":
-    # TODO
-    # Implementere 1d euler likning løser (etter leveque):
-    #    - skriv om euler likning til matriselikning
-    #      og få egenverdier med ideel gas
-    #    - Rieman problem
-    #    - ideel gas
-    #    - masse vs molar form
-    # e = C_V T
-    # PV = nRT or P = \rho R T
-    # e, rho -> T, P, ...
     N_cell = 102
-    # sod shock tube
+    # sod shock tube TODO reset u = 0
     rho_l, u_l, p_l = 1, 0, 1
     rho_r, u_r, p_r = 0.125, 0, 0.1
 
@@ -195,14 +207,31 @@ if __name__ == "__main__":
         [np.ones(N_cell//2) * u_l, np.ones(N_cell - N_cell//2) * u_r])
     p0 = np.concatenate(
         [np.ones(N_cell//2) * p_l, np.ones(N_cell - N_cell//2) * p_r])
-    e0 = p0 / (gamma - 1) / rho0
-    Q0 = np.array([rho0, rho0*u0, e0])
+
+    Q0 = get_conservative(rho0, u0, p0)
+
     L = 1
     T = 0.25
     Qlf = euler_1d_lf(N_cell, Q0, L, T)
     Qroe = euler_1d_roe(N_cell, Q0, L, T)
+    rho_roe, u_roe, p_roe = get_primitive(Qroe)
+    rho_lf, u_lf, p_lf = get_primitive(Qlf)
     # plot
     x = np.linspace(0, L, len(p0))
+
+    rho0_test, u0_test, p0_test = get_primitive(get_conservative(rho0, u0, p0))
+    fig, ax = plt.subplots()
+    ax.plot(x, p0_test, "x", label="initial p test")
+    ax.plot(x, p0, label="initial p")
+    ax.plot(x, rho0_test, "x", label="initial rho test")
+    ax.plot(x, rho0, label="initial rho")
+    ax.plot(x, u0_test, "x", label="initial u test")
+    ax.plot(x, u0, label="initial u")
+
+    ax.set_xlabel("x")
+    ax.set_ylabel("rho,u,p")
+    plt.savefig("plots/coordinate_test.pdf")
+    ax.legend()
 
     fig, ax = plt.subplots()
     ax.plot(x, Q0[0, :], label="initial")
@@ -222,12 +251,22 @@ if __name__ == "__main__":
     ax.legend()
     plt.savefig("plots/velocity.pdf")
 
+    # OBS får ikke e = (E/ rho - 0.5 u^2) til å stemme
     fig, ax = plt.subplots()
     ax.plot(x, Q0[2, :], label="initial")
     ax.plot(x, Qroe[2, :], label="roe solver")
     ax.plot(x, Qlf[2, :], label="lax-friedrichs")
     ax.set_xlabel("x [m]")
-    ax.set_ylabel("e [J]")
+    ax.set_ylabel("E [J]")
     ax.legend()
     plt.savefig("plots/energy.pdf")
+
+    fig, ax = plt.subplots()
+    ax.plot(x, p0, label="initial")
+    ax.plot(x, p_roe, label="roe solver")
+    ax.plot(x, p_lf, label="lax-friedrichs")
+    ax.set_xlabel("x")
+    ax.set_ylabel("p")
+    ax.legend()
+
     plt.show()
