@@ -133,6 +133,7 @@ def euler_1d_roe(N_cell, Q0, L, T):
         - 2 inneholder bare u X
         -funker nå
     12. Hva er sammenhengen mellom celleverdien av c og c1 og c2?
+        -Dette har jeg ikke forstått enda, men ser ut til å funke når man bruker max(c1, c2) i CFL 
     13. Er coordinatene i f egt (rho, rhou, H) ??? X
             - nå tror jeg at det er riktig med (rho, rho u, E)
     """
@@ -143,20 +144,16 @@ def euler_1d_roe(N_cell, Q0, L, T):
     ApDQ1 = np.zeros_like(Q)
     AmDQ2 = np.zeros_like(Q)
     while t < T:
-        # time step
-        rho, u, p = get_primitive(Q)
-        c = max(np.sqrt(gamma * p / rho))
-        dt = min(0.4 * dx / (c + max(abs(Q[1, 1:-1]))), T-t)
-
         # TEST
-        c1_list = np.zeros(N_cell-2)
-        c2_list = np.zeros(N_cell-2)
+        c = 0
         for i in range(1, N_cell-1):
             # get roe average
             u1, h1, c1, alpha1, R1, lam1 = get_roe_avg(Q[:, i-1], Q[:, i])
             u2, h2, c2, alpha2, R2, lam2 = get_roe_avg(Q[:, i], Q[:, i+1])
-            c1_list[i-1] = c1
-            c2_list[i-1] = c2
+
+            # find max c
+            if max(c1, c2) > c:
+                c = max(c1, c2)
 
             # TEST RH condition TODO har vi samme kordinater på f og A?
             A = R1 @ np.diag(lam1) @ np.linalg.inv(R1)
@@ -171,12 +168,8 @@ def euler_1d_roe(N_cell, Q0, L, T):
             # calculate A^{\mp} Delta Q_{i \pm 1/2}
             ApDQ1[:, i] = R1 @ np.diag(lam1p) @ alpha1
             AmDQ2[:, i] = R2 @ np.diag(lam2m) @ alpha2
-        # print("c1", c1_list)
-        # print("c2", c2_list)
-        # print("np.sqrt((gamma - 1) * (Q[2, 1:-1] + p / Q[0, 1:-1]))",
-        #       np.sqrt((gamma - 1) * (Q[2, 1:-1] + p[1:-1] / Q[0, 1:-1])))
-        # exit()
-        # update Q
+
+        dt = min(0.4 * dx / (c + max(abs(Q[1, 1:-1]))), T-t)
         if np.any(np.isnan(- dt / dx * (AmDQ2 + ApDQ1))):
             print("NAN")
             return Q
@@ -220,18 +213,6 @@ if __name__ == "__main__":
     x = np.linspace(0, L, len(p0))
 
     rho0_test, u0_test, p0_test = get_primitive(get_conservative(rho0, u0, p0))
-    fig, ax = plt.subplots()
-    ax.plot(x, p0_test, "x", label="initial p test")
-    ax.plot(x, p0, label="initial p")
-    ax.plot(x, rho0_test, "x", label="initial rho test")
-    ax.plot(x, rho0, label="initial rho")
-    ax.plot(x, u0_test, "x", label="initial u test")
-    ax.plot(x, u0, label="initial u")
-
-    ax.set_xlabel("x")
-    ax.set_ylabel("rho,u,p")
-    plt.savefig("plots/coordinate_test.pdf")
-    ax.legend()
 
     fig, ax = plt.subplots()
     ax.plot(x, Q0[0, :], label="initial")
@@ -268,5 +249,6 @@ if __name__ == "__main__":
     ax.set_xlabel("x")
     ax.set_ylabel("p")
     ax.legend()
+    plt.savefig("plots/pressure.pdf")
 
     plt.show()
