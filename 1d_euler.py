@@ -40,9 +40,10 @@ def euler_1d_lf(N_cell, Q0, L, T):
     Solve 1d euler with Lax-Friedrich method for polytropic gas
     # TODO
     # 0. sammenlikne med alexandra og finn liten bug
-    # 1. Roe eller hllc
+    # 1. Roe eller hllc X
     # 2. Thermopack?
         - thermodynamiske deriverte
+    # 3. Finn bug i LF
     """
 
     Q = copy.deepcopy(Q0)
@@ -50,16 +51,13 @@ def euler_1d_lf(N_cell, Q0, L, T):
     # Time stepping
     t = 0
     while t < T:
-        # time step
-        rho = Q[0, 1:-1]
-        rhou = Q[1, 1:-1]
-        E = Q[2, 1:-1]
-        p = (gamma - 1) * (E - 0.5 * rhou**2 / rho)
+        rho, u, p = get_primitive(Q)
         c = max(np.sqrt(gamma * p / rho))
         dt = min(0.9 * dx / (c + max(abs(Q[1, 1:-1]))), T-t)
 
         Q[:, 1:-1] = (Q[:, :-2] + Q[:, 2:]) / 2 - dt / \
             (2*dx) * (f(Q[:, 2:]) - f(Q[:, :-2]))
+        
         # boundary condition
         Q[:, 0] = Q[:, 1]
         Q[:, -1] = Q[:, -2]
@@ -136,6 +134,12 @@ def euler_1d_roe(N_cell, Q0, L, T):
         -Dette har jeg ikke forstått enda, men ser ut til å funke når man bruker max(c1, c2) i CFL 
     13. Er coordinatene i f egt (rho, rhou, H) ??? X
             - nå tror jeg at det er riktig med (rho, rho u, E)
+    14. Gjøre om til thermopack
+            - rho_hat, H_hat og u_hat så kan vi gjøre en flash med (rho_hat, h_hat) 
+            - h = H - 0.5 u^2
+            - case i gassfasen C02,10bar,400k
+            - h_hat = enthalpy_tv(T, 1/rho_hat, ...) løst for T
+            - husk molbasis
     """
     Q = copy.deepcopy(Q0)
     dx = L / N_cell
@@ -204,7 +208,7 @@ if __name__ == "__main__":
     Q0 = get_conservative(rho0, u0, p0)
 
     L = 1
-    T = 0.25
+    T = 0.125
     Qlf = euler_1d_lf(N_cell, Q0, L, T)
     Qroe = euler_1d_roe(N_cell, Q0, L, T)
     rho_roe, u_roe, p_roe = get_primitive(Qroe)
