@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import copy
+from thermopack.multiparameter import multiparam
+
 # Constants
 gamma = 1.4
 R = 8.314
@@ -53,11 +55,11 @@ def euler_1d_lf(N_cell, Q0, L, T):
     while t < T:
         rho, u, p = get_primitive(Q)
         c = max(np.sqrt(gamma * p / rho))
-        dt = min(0.9 * dx / (c + max(abs(Q[1, 1:-1]))), T-t)
+        dt = min(0.8 * dx / (c + max(abs(Q[1, 1:-1]))), T-t)
 
         Q[:, 1:-1] = (Q[:, :-2] + Q[:, 2:]) / 2 - dt / \
             (2*dx) * (f(Q[:, 2:]) - f(Q[:, :-2]))
-        
+
         # boundary condition
         Q[:, 0] = Q[:, 1]
         Q[:, -1] = Q[:, -2]
@@ -193,7 +195,7 @@ def euler_1d_roe(N_cell, Q0, L, T):
 
 if __name__ == "__main__":
     N_cell = 102
-    # sod shock tube TODO reset u = 0
+    # sod shock tube
     rho_l, u_l, p_l = 1, 0, 1
     rho_r, u_r, p_r = 0.125, 0, 0.1
 
@@ -208,7 +210,7 @@ if __name__ == "__main__":
     Q0 = get_conservative(rho0, u0, p0)
 
     L = 1
-    T = 0.125
+    T = 0.25
     Qlf = euler_1d_lf(N_cell, Q0, L, T)
     Qroe = euler_1d_roe(N_cell, Q0, L, T)
     rho_roe, u_roe, p_roe = get_primitive(Qroe)
