@@ -74,11 +74,11 @@ def get_roe_avg(Q1, Q2):
     """
     # left state
     rho1, u1, p1 = get_primitive(Q1)
-    E1 = p1 / (gamma - 1) + 0.5 * rho1 * u1**2
+    E1 = Q1[2]
 
     # right state
     rho2, u2, p2 = get_primitive(Q2)
-    E2 = p2 / (gamma - 1) + 0.5 * rho2 * u2**2
+    E2 = Q2[2]
 
     # Get Roe averaged quatities
     u = (np.sqrt(rho1) * u1 + np.sqrt(rho2) * u2) / \
