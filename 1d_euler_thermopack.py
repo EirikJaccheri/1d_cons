@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import copy
+from scipy.optimize import root_scalar
 from thermopack.multiparameter import multiparam
 
 
@@ -126,17 +127,20 @@ def euler_1d_lf(eos, N_cell, Q0, L, time, z):
     return Q
 
 
-def get_roe_avg(Q1, Q2):
+def get_roe_avg(eos, Q1, Q2):
     """
     Roe average of left statte Q1 and right state Q2
     """
+    mw = sum([z[i]*eos.compmoleweight(i+1) *
+              1e-3 for i in range(eos.nc)])  # kg/mol
+
     # left state
-    p1, u1, T1, c1 = get_primitive(GERGCO2, Q1, z)
+    p1, u1, T1, c1 = get_primitive_single(eos, Q1, z)
     rho1 = Q1[0]
     E1 = Q1[2]
 
     # right state
-    p2, u2, T2, c2 = get_primitive(GERGCO2, Q2, z)
+    p2, u2, T2, c2 = get_primitive_single(eos, Q2, z)
     rho2 = Q2[0]
     E2 = Q2[2]
 
@@ -151,7 +155,18 @@ def get_roe_avg(Q1, Q2):
     rho = np.sqrt(rho1 * rho2)
 
     # Find temperature to compute speed of sound
-    def f(T): return h - eos.enthalpy_tv(T, rho, z)
+    h = (H - 0.5 * u**2) * mw
+    # flsh = eos.two_phase_cflash(
+    def f(T): return h - eos.enthalpy_tv(T, 1/rho, z)
+    solution = root_scalar(f, x0=T1)
+    if not solution.flag == "converged":
+        print("could not find temperature root")
+        exit()
+    else:
+        T = solution.root
+
+    c = eos.speed_of_sound(
+        T, p, flsh.x, flsh.y, z, flsh.betaV, flsh.betaL, flsh.phase)
 
     # create matrix of eigenvector Leveque s301
     R = np.array([
@@ -187,11 +202,10 @@ if __name__ == "__main__":
     L = 1
     t = 0.0005
     Q0 = get_conservative(GERGCO2, p0, u0, T0, z)
-    # TEST
-    Q1 = Q0[:, 1]
-    Q2 = Q0[:, -1]
-    # get_roe_avg(Q1, Q2)
-    # exit()
+    # # TEST
+    # Q1=Q0[:, 1]
+    # Q2=Q0[:, -1]
+    # get_roe_avg(GERGCO2, Q1, Q2)
 
     Qlf = euler_1d_lf(GERGCO2, N_cell, Q0, L, t, z)
     p_lf, u_lf, T_lf, c_2 = get_primitive(GERGCO2, Qlf, z)

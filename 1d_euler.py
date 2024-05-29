@@ -180,7 +180,6 @@ def euler_1d_roe(N_cell, Q0, L, T):
             print("NAN")
             return Q
         else:
-            # TODO sjekk fortegn!!!! ustabilitet gikk bort men fortsatt feil svar
             Q = Q - dt / dx * (AmDQ2 + ApDQ1)
 
         # boundary condition
