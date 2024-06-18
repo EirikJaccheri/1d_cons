@@ -128,6 +128,17 @@ def euler_1d_lf(eos, N_cell, Q0, L, time, z):
     return Q
 
 
+def calculate_Gamma(eos, z, v, T):
+    """
+    Calculate Gruneisen coeficient for single phase
+
+    """
+    E, dudt = eos.internal_energy_tv(T, v, z, dedt=True)
+    p, dpdt = eos.pressure_tv(T, v, z, dpdt=True)
+    Gamma = v * dpdt/dudt
+    return Gamma
+
+
 def get_roe_avg(eos, z, Q1, Q2):
     """
     Roe average of left statte Q1 and right state Q2
@@ -153,13 +164,13 @@ def get_roe_avg(eos, z, Q1, Q2):
     u_hat = (np.sqrt(rho1) * u1 + np.sqrt(rho2) * u2) / \
         (np.sqrt(rho1) + np.sqrt(rho2))
     H_hat = (H1 * np.sqrt(rho1) + H2 *
-         np.sqrt(rho2)) / (np.sqrt(rho1) + np.sqrt(rho2))
+             np.sqrt(rho2)) / (np.sqrt(rho1) + np.sqrt(rho2))
     # fra alexandra prosjektoppgave appendix A TODO check
     rho_hat = np.sqrt(rho1 * rho2)
 
     # Find temperature to compute speed of sound
-    h_hat = (H_hat - 0.5 * u_hat**2) * mw # J / mol
-    v_hat = 1/rho_hat * mw # m^3/mol
+    h_hat = (H_hat - 0.5 * u_hat**2) * mw  # J / mol
+    v_hat = 1/rho_hat * mw  # m^3/mol
     def dh(T): return h_hat - eos.enthalpy_tv(T, v_hat, z)
     solution = root_scalar(dh, x0=T1)
     if not solution.flag == "converged":
@@ -167,19 +178,20 @@ def get_roe_avg(eos, z, Q1, Q2):
         exit()
     else:
         T_hat = solution.root[0]
-    
-    volume = 1 # m3
-    n = [volume / v_hat] # mol
+
+    volume = 1  # m3
+    n = [volume / v_hat]  # mol
     c_hat = eos.speed_of_sound_tv(T_hat, volume, n)
     # create matrix of eigenvector Leveque s301
     # TODO CHANGE matrix below to matrix that is valid for general eos
     # TODO Also perform calculation myself
     # TODO See fortran code for Gruneisen coeficient
+    Gamma = calculate_Gamma(eos, z, v_hat, T_hat)
 
     R = np.array([
         [1, 1, 1],
         [u_hat-c_hat, u_hat, u_hat+c_hat],
-        [H_hat-u_hat*c_hat, 0.5*u_hat**2, H_hat+u_hat*c_hat]]
+        [H_hat-u_hat*c_hat, H_hat - c_hat**2 / Gamma, H_hat+u_hat*c_hat]]
     )
 
     # Find wave speeds
@@ -190,6 +202,7 @@ def get_roe_avg(eos, z, Q1, Q2):
     lam = np.array([u_hat-c_hat, u_hat, u_hat+c_hat])
 
     return u_hat, H_hat, c_hat, alpha, R, lam
+
 
 def euler_1d_roe(eos, z, N_cell, Q0, L, T):
     """
@@ -210,8 +223,10 @@ def euler_1d_roe(eos, z, N_cell, Q0, L, T):
         c = 0
         for i in range(1, N_cell-1):
             # get roe average
-            u1, h1, c1, alpha1, R1, lam1 = get_roe_avg(eos, z, Q[:, i-1], Q[:, i])
-            u2, h2, c2, alpha2, R2, lam2 = get_roe_avg(eos, z, Q[:, i], Q[:, i+1])
+            u1, h1, c1, alpha1, R1, lam1 = get_roe_avg(
+                eos, z, Q[:, i-1], Q[:, i])
+            u2, h2, c2, alpha2, R2, lam2 = get_roe_avg(
+                eos, z, Q[:, i], Q[:, i+1])
 
             # find max c
             if max(c1, c2) > c:
@@ -220,7 +235,7 @@ def euler_1d_roe(eos, z, N_cell, Q0, L, T):
             # TEST RH condition TODO har vi samme kordinater på f og A?
             A = R1 @ np.diag(lam1) @ np.linalg.inv(R1)
             delta = Q[:, i] - Q[:, i-1]
-            # if not np.allclose(A @ delta - (f(Q[:, i],p) - f(Q[:, i-1])), 0):
+            # if not np.allclose(A @ delta - (f(Q[:, i], p) - f(Q[:, i-1])), 0):
             #     print("RH condition: ", "A delta - (f(Q[:,i]) - f(Q[:,i-1]))", A @
             #           delta - (f(Q[:, i]) - f(Q[:, i-1])), "for cell ", i)
 
@@ -261,7 +276,7 @@ if __name__ == "__main__":
     # test (alexandra shock tube project report)
     T0 = 350  # K
     p_l, p_r = 1e6, 0.1e6  # Pa
-    u_l, u_r = 0., 0.  # m/s TODO første komponent blir riktig med 0.1, hvorfor?  
+    u_l, u_r = 0., 0.  # m/s TODO første komponent blir riktig med 0.1, hvorfor?
     p0 = np.concatenate(
         [p_l*np.ones(N_cell//2), p_r*np.ones(N_cell - N_cell//2)])
     u0 = np.concatenate(
@@ -273,7 +288,7 @@ if __name__ == "__main__":
     t = 0.0005
     Q0 = get_conservative(GERGCO2, p0, u0, T0, z)
 
-    #Qlf = euler_1d_lf(GERGCO2, N_cell, Q0, L, t, z)
+    # Qlf = euler_1d_lf(GERGCO2, N_cell, Q0, L, t, z)
     Qroe = euler_1d_roe(GERGCO2, z, N_cell, Q0, L, t)
     p_lf, u_lf, T_lf, c_2 = get_primitive(GERGCO2, Qlf, z)
     print(p_lf, u_lf, T_lf, c_2)
