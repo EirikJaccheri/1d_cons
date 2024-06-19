@@ -118,11 +118,11 @@ def euler_1d_lf(eos, N_cell, Q0, L, time, z):
         Q[:, 0] = Q[:, 1]
         Q[:, -1] = Q[:, -2]
 
-        ax.clear()
-        ax.set_xlabel("x [m]")
-        ax.set_ylabel("p [Pa]")
-        ax.plot(x, p)
-        plt.pause(0.001)
+        # ax.clear()
+        # ax.set_xlabel("x [m]")
+        # ax.set_ylabel("p [Pa]")
+        # ax.plot(x, p)
+        # plt.pause(0.001)
         t += dt
         print("t", t)
     return Q
@@ -171,13 +171,17 @@ def get_roe_avg(eos, z, Q1, Q2):
     # Find temperature to compute speed of sound
     h_hat = (H_hat - 0.5 * u_hat**2) * mw  # J / mol
     v_hat = 1/rho_hat * mw  # m^3/mol
-    def dh(T): return h_hat - eos.enthalpy_tv(T, v_hat, z)
+    def dh(T): return h_hat - eos.enthalpy_tv(T, v_hat, z)[0]
     solution = root_scalar(dh, x0=T1)
     if not solution.flag == "converged":
         print("could not find temperature root")
         exit()
     else:
-        T_hat = solution.root[0]
+        # print("solution.root", solution.root)
+        # print(type(solution.root))
+        # print(type(h_hat))
+        # print(type(eos.enthalpy_tv(T1, v_hat, z)[0]))
+        T_hat = solution.root
 
     volume = 1  # m3
     n = [volume / v_hat]  # mol
@@ -233,11 +237,13 @@ def euler_1d_roe(eos, z, N_cell, Q0, L, T):
                 c = max(c1, c2)
 
             # TEST RH condition TODO har vi samme kordinater på f og A?
-            A = R1 @ np.diag(lam1) @ np.linalg.inv(R1)
-            delta = Q[:, i] - Q[:, i-1]
-            # if not np.allclose(A @ delta - (f(Q[:, i], p) - f(Q[:, i-1])), 0):
-            #     print("RH condition: ", "A delta - (f(Q[:,i]) - f(Q[:,i-1]))", A @
-            #           delta - (f(Q[:, i]) - f(Q[:, i-1])), "for cell ", i)
+            # p1, u1, T1, c1 = get_primitive_single(eos, Q[:, i-1], z)
+            # p2, u2, T2, c2 = get_primitive_single(eos, Q[:, i], z)
+            # A = R1 @ np.diag(lam1) @ np.linalg.inv(R1)
+            # delta = Q[:, i] - Q[:, i-1]
+            # if not np.allclose(A @ delta, f(Q[:, i], p2) - f(Q[:, i-1], p1), atol=1e-3, rtol=1e-2):
+            #     print("RH condition: ", "A delta ", A @
+            #           delta, "(f(Q[:,i]) - f(Q[:,i-1]))", (f(Q[:, i], p2) - f(Q[:, i-1], p1)), "for cell ", i)
 
             lam1p = 0.5 * (lam1 + np.abs(lam1))
             lam2m = 0.5 * (lam2 - np.abs(lam2))
@@ -246,14 +252,14 @@ def euler_1d_roe(eos, z, N_cell, Q0, L, T):
             ApDQ1[:, i] = R1 @ np.diag(lam1p) @ alpha1
             AmDQ2[:, i] = R2 @ np.diag(lam2m) @ alpha2
 
-        p_test, u_test, T_test, c_test = get_primitive(eos, Q, z)
-        ax.clear()
-        ax.set_xlabel("x [m]")
-        ax.set_ylabel("p [Pa]")
-        ax.plot(x, p_test)
-        plt.pause(0.001)
+        # p_test, u_test, T_test, c_test = get_primitive(eos, Q, z)
+        # ax.clear()
+        # ax.set_xlabel("x [m]")
+        # ax.set_ylabel("p [Pa]")
+        # ax.plot(x, p_test)
+        # plt.pause(0.001)
 
-        dt = min(0.4 * dx / (c + max(abs(Q[1, 1:-1]))), T-t)
+        dt = min(0.9 * dx / (c + max(abs(Q[1, 1:-1]))), T-t)
         if np.any(np.isnan(- dt / dx * (AmDQ2 + ApDQ1))):
             print("NAN")
             return Q
@@ -276,7 +282,7 @@ if __name__ == "__main__":
     # test (alexandra shock tube project report)
     T0 = 350  # K
     p_l, p_r = 1e6, 0.1e6  # Pa
-    u_l, u_r = 0., 0.  # m/s TODO første komponent blir riktig med 0.1, hvorfor?
+    u_l, u_r = 1., 1.  # m/s TODO første komponent blir riktig med 0.1, hvorfor?
     p0 = np.concatenate(
         [p_l*np.ones(N_cell//2), p_r*np.ones(N_cell - N_cell//2)])
     u0 = np.concatenate(
@@ -288,9 +294,10 @@ if __name__ == "__main__":
     t = 0.0005
     Q0 = get_conservative(GERGCO2, p0, u0, T0, z)
 
-    # Qlf = euler_1d_lf(GERGCO2, N_cell, Q0, L, t, z)
+    Qlf = euler_1d_lf(GERGCO2, N_cell, Q0, L, t, z)
     Qroe = euler_1d_roe(GERGCO2, z, N_cell, Q0, L, t)
     p_lf, u_lf, T_lf, c_2 = get_primitive(GERGCO2, Qlf, z)
+    p_roe, u_roe, T_roe, c_roe = get_primitive(GERGCO2, Qroe, z)
     print(p_lf, u_lf, T_lf, c_2)
 
     # Plotting
@@ -298,7 +305,7 @@ if __name__ == "__main__":
 
     fig, ax = plt.subplots()
     ax.plot(x, Q0[0, :], label="initial")
-    # ax.plot(x, Qroe[0, :], label="roe solver")
+    ax.plot(x, Qroe[0, :], label="roe solver")
     ax.plot(x, Qlf[0, :], label="lax-friedrichs")
     ax.set_xlabel("x")
     ax.set_ylabel("rho")
@@ -307,7 +314,7 @@ if __name__ == "__main__":
 
     fig, ax = plt.subplots()
     ax.plot(x, Q0[1, :] / Q0[0, :], label="initial")
-    # ax.plot(x, Qroe[1, :] / Qroe[0, :], label="roe solver")
+    ax.plot(x, Qroe[1, :] / Qroe[0, :], label="roe solver")
     ax.plot(x, Qlf[1, :] / Qlf[0, :], label="lax-friedrichs")
     ax.set_xlabel("x")
     ax.set_ylabel("u")
@@ -317,7 +324,7 @@ if __name__ == "__main__":
     # OBS får ikke e = (E/ rho - 0.5 u^2) til å stemme
     fig, ax = plt.subplots()
     ax.plot(x, Q0[2, :], label="initial")
-    # ax.plot(x, Qroe[2, :], label="roe solver")
+    ax.plot(x, Qroe[2, :], label="roe solver")
     ax.plot(x, Qlf[2, :], label="lax-friedrichs")
     ax.set_xlabel("x [m]")
     ax.set_ylabel("E [J]")
@@ -326,7 +333,7 @@ if __name__ == "__main__":
 
     fig, ax = plt.subplots()
     ax.plot(x, p0, label="initial")
-    # ax.plot(x, p_roe, label="roe solver")
+    ax.plot(x, p_roe, label="roe solver")
     ax.plot(x, p_lf, label="lax-friedrichs")
     ax.set_xlabel("x")
     ax.set_ylabel("p")
