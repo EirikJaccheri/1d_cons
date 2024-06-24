@@ -177,19 +177,11 @@ def get_roe_avg(eos, z, Q1, Q2):
         print("could not find temperature root")
         exit()
     else:
-        # print("solution.root", solution.root)
-        # print(type(solution.root))
-        # print(type(h_hat))
-        # print(type(eos.enthalpy_tv(T1, v_hat, z)[0]))
         T_hat = solution.root
 
     volume = 1  # m3
     n = [volume / v_hat]  # mol
     c_hat = eos.speed_of_sound_tv(T_hat, volume, n)
-    # create matrix of eigenvector Leveque s301
-    # TODO CHANGE matrix below to matrix that is valid for general eos
-    # TODO Also perform calculation myself
-    # TODO See fortran code for Gruneisen coeficient
     Gamma = calculate_Gamma(eos, z, v_hat, T_hat)
 
     R = np.array([
@@ -204,6 +196,19 @@ def get_roe_avg(eos, z, Q1, Q2):
 
     # create vector of eigenvalues
     lam = np.array([u_hat-c_hat, u_hat, u_hat+c_hat])
+
+
+    # TEST RH condition
+    A = R @ np.diag(lam) @ np.linalg.inv(R)
+    delta = Q2 - Q1
+    if not np.allclose(A @ delta, f(Q2, p2) - f(Q1, p1), atol=1e-3, rtol=1e-2):
+        # print("RH condition: ", "A delta ", A @
+        #       delta, "(f(Q[:,i]) - f(Q[:,i-1]))", (f(Q[:, i], p2) - f(Q[:, i-1], p1)), "for cell ", i)
+        print("RH cond not satisfied for delta = ", delta)
+        print("Rel error", np.abs(A @ delta - (f(Q2, p2) - f(Q1, p1))) / np.abs(A @ delta))
+        print("abs error", np.abs(A @ delta - (f(Q2, p2) - f(Q1, p1))))
+        print("*********")
+    
 
     return u_hat, H_hat, c_hat, alpha, R, lam
 
@@ -236,15 +241,6 @@ def euler_1d_roe(eos, z, N_cell, Q0, L, T):
             if max(c1, c2) > c:
                 c = max(c1, c2)
 
-            # TEST RH condition TODO har vi samme kordinater på f og A?
-            # p1, u1, T1, c1 = get_primitive_single(eos, Q[:, i-1], z)
-            # p2, u2, T2, c2 = get_primitive_single(eos, Q[:, i], z)
-            # A = R1 @ np.diag(lam1) @ np.linalg.inv(R1)
-            # delta = Q[:, i] - Q[:, i-1]
-            # if not np.allclose(A @ delta, f(Q[:, i], p2) - f(Q[:, i-1], p1), atol=1e-3, rtol=1e-2):
-            #     print("RH condition: ", "A delta ", A @
-            #           delta, "(f(Q[:,i]) - f(Q[:,i-1]))", (f(Q[:, i], p2) - f(Q[:, i-1], p1)), "for cell ", i)
-
             lam1p = 0.5 * (lam1 + np.abs(lam1))
             lam2m = 0.5 * (lam2 - np.abs(lam2))
 
@@ -252,12 +248,12 @@ def euler_1d_roe(eos, z, N_cell, Q0, L, T):
             ApDQ1[:, i] = R1 @ np.diag(lam1p) @ alpha1
             AmDQ2[:, i] = R2 @ np.diag(lam2m) @ alpha2
 
-        # p_test, u_test, T_test, c_test = get_primitive(eos, Q, z)
-        # ax.clear()
-        # ax.set_xlabel("x [m]")
-        # ax.set_ylabel("p [Pa]")
-        # ax.plot(x, p_test)
-        # plt.pause(0.001)
+        p_test, u_test, T_test, c_test = get_primitive(eos, Q, z)
+        ax.clear()
+        ax.set_xlabel("x [m]")
+        ax.set_ylabel("p [Pa]")
+        ax.plot(x, p_test)
+        plt.pause(0.001)
 
         dt = min(0.9 * dx / (c + max(abs(Q[1, 1:-1]))), T-t)
         if np.any(np.isnan(- dt / dx * (AmDQ2 + ApDQ1))):
@@ -277,12 +273,12 @@ def euler_1d_roe(eos, z, N_cell, Q0, L, T):
 
 
 if __name__ == "__main__":
-    N_cell = 102
+    N_cell = 32
     z = [1.]
     # test (alexandra shock tube project report)
-    T0 = 350  # K
+    T0 = 500  # K
     p_l, p_r = 1e6, 0.1e6  # Pa
-    u_l, u_r = 1., 1.  # m/s TODO første komponent blir riktig med 0.1, hvorfor?
+    u_l, u_r = 0., 0.  # m/s TODO første komponent blir riktig med 0.1, hvorfor?
     p0 = np.concatenate(
         [p_l*np.ones(N_cell//2), p_r*np.ones(N_cell - N_cell//2)])
     u0 = np.concatenate(

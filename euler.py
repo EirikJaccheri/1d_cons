@@ -196,6 +196,10 @@ def euler_1d_roe(N_cell, Q0, L, T):
 
 
 if __name__ == "__main__":
+    """
+    lag ideel gass klasse
+    """
+
     N_cell = 102
     # sod shock tube
     rho_l, u_l, p_l = 1, 0, 1
