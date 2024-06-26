@@ -75,8 +75,13 @@ def get_roe_avg(Q1, Q2):
     # left state
     rho1, u1, p1 = get_primitive(Q1)
     E1 = Q1[2]
-    H1 = (E1 + p1) / rho1
-
+    H1 = (E1 + p1) / (rho1) 
+    print("c",  np.sqrt(np.abs((gamma - 1) * (H1 * 1e3 - 0.5 * u1**2)))*1e-3) 
+    print("p1", p1)
+    print("u1", u1)
+    print("rho1", rho1)
+    print("E1", E1)
+    print("H1", H1)
 
     # right state
     rho2, u2, p2 = get_primitive(Q2)
