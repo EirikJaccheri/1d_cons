@@ -48,7 +48,7 @@ def get_primitive_single(eos, Q, z):
     mw = sum([z[i]*eos.compmoleweight(i+1) *
               1e-3 for i in range(eos.nc)])  # kg/mol
     v = mw / rho  # m^3/mol
-    e = (E / rho - 0.5 * rhou**2 / rho) * mw  # J/kg
+    e = (E / rho - 0.5 * rhou**2 / rho**2) * mw  # J/kg
     flsh = eos.two_phase_uvflash(z, e, v)
     T = flsh.T
     p = flsh.p
