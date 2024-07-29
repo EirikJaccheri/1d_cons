@@ -273,7 +273,7 @@ def euler_1d_roe(eos, z, N_cell, Q0, L, T):
 
 
 if __name__ == "__main__":
-    N_cell = 32
+    N_cell = 112
     z = [1.]
     # test (alexandra shock tube project report)
     T0 = 500  # K
@@ -319,11 +319,11 @@ if __name__ == "__main__":
 
     # OBS får ikke e = (E/ rho - 0.5 u^2) til å stemme
     fig, ax = plt.subplots()
-    ax.plot(x, Q0[2, :], label="initial")
-    ax.plot(x, Qroe[2, :], label="roe solver")
-    ax.plot(x, Qlf[2, :], label="lax-friedrichs")
+    ax.plot(x, Q0[2, :]/Q0[0,:]- 0.5 * (Q0[1,:]/Q0[0,:])**2, label="initial")
+    ax.plot(x, Qroe[2, :]/Qroe[0,:] - 0.5 * (Qroe[1,:]/Qroe[0,:])**2, label="roe solver")
+    ax.plot(x, Qlf[2, :]/Qlf[0,:]- 0.5 * (Qlf[1,:]/Qlf[0,:])**2, label="lax-friedrichs")
     ax.set_xlabel("x [m]")
-    ax.set_ylabel("E [J]")
+    ax.set_ylabel("e [J/kg/m3]")
     ax.legend()
     plt.savefig("plots/energy.pdf")
 
